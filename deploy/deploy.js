@@ -1,9 +1,8 @@
 const fs = require('fs')
 const path = require('path')
 const env = require('./src/loadEnv')
-const { ZERO_ADDRESS } = require('./src/constants')
 
-const { BRIDGE_MODE, BLOCK_REWARD_ADDRESS, ERC20_TOKEN_ADDRESS } = env
+const { BRIDGE_MODE, ERC20_TOKEN_ADDRESS } = env
 
 const deployResultsPath = path.join(__dirname, './bridgeDeploymentResults.json')
 
@@ -33,7 +32,7 @@ async function deployNativeToErc() {
         foreignBridge: {
           ...foreignBridge,
           erc677
-        },
+        }
       },
       null,
       4
@@ -49,7 +48,9 @@ async function deployErcToErc() {
   const { homeBridge, erc677 } = await deployHome()
   const { foreignBridge } = await deployForeign()
   console.log('\nDeployment has been completed.\n\n')
-  console.log(`[   Home  ] HomeBridge: ${homeBridge.address} at block ${homeBridge.deployedBlockNumber}`)
+  console.log(
+    `[   Home  ] HomeBridge: ${homeBridge.address} at block ${homeBridge.deployedBlockNumber}`
+  )
   console.log(`[   Home  ] ERC677 Bridgeable Token: ${erc677.address}`)
   console.log(
     `[ Foreign ] ForeignBridge: ${foreignBridge.address} at block ${
@@ -84,9 +85,7 @@ async function deployErcToNative() {
   const { foreignBridge } = await deployForeign()
   console.log('\nDeployment has been completed.\n\n')
   console.log(
-    `[ Home ] HomeBridge: ${homeBridge.address} at block ${
-      homeBridge.deployedBlockNumber
-    }`
+    `[ Home ] HomeBridge: ${homeBridge.address} at block ${homeBridge.deployedBlockNumber}`
   )
   console.log(
     `[ Foreign ] ForeignBridge: ${foreignBridge.address} at block ${
@@ -111,6 +110,39 @@ async function deployErcToNative() {
   console.log('Contracts Deployment have been saved to `bridgeDeploymentResults.json`')
 }
 
+async function deployFactory() {
+  const deployHome = require('./src/factories/home')
+  const deployForeign = require('./src/factories/foreign')
+
+  const { homeFactory, mapper } = await deployHome()
+  const { foreignFactory } = await deployForeign()
+  console.log('\nDeployment has been completed.\n\n')
+  console.log(`[   Home  ] HomeFactory: ${homeFactory.address} at block ${homeFactory.deployedBlockNumber}`)
+  console.log(`[   Home  ] BridgeMapper: ${mapper.address} at block ${mapper.deployedBlockNumber}`)
+  console.log(
+    `[ Foreign ] ForeignFactory: ${foreignFactory.address} at block ${
+      foreignFactory.deployedBlockNumber
+    }`
+  )
+  fs.writeFileSync(
+    deployResultsPath,
+    JSON.stringify(
+      {
+        homeFactory: {
+          ...homeFactory,
+          mapper
+        },
+        foreignFactory: {
+          ...foreignFactory
+        }
+      },
+      null,
+      4
+    )
+  )
+  console.log('Contracts Deployment have been saved to `bridgeDeploymentResults.json`')
+}
+
 async function main() {
   console.log(`Bridge mode: ${BRIDGE_MODE}`)
   switch (BRIDGE_MODE) {
@@ -123,9 +155,12 @@ async function main() {
     case 'ERC_TO_NATIVE':
       await deployErcToNative()
       break
+    case 'ERC_TO_ERC_MULTIPLE':
+      await deployFactory()
+      break
     default:
       console.log(BRIDGE_MODE)
-      throw new Error('Please specify BRIDGE_MODE: NATIVE_TO_ERC or ERC_TO_ERC')
+      throw new Error('Please specify BRIDGE_MODE: NATIVE_TO_ERC or ERC_TO_ERC or ERC_TO_NATIVE or ERC_TO_ERC_MULTIPLE')
   }
 }
 
