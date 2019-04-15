@@ -4,14 +4,17 @@ import "openzeppelin-solidity/contracts/token/ERC20/BurnableToken.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/MintableToken.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/DetailedERC20.sol";
 import "./IBurnableMintableERC677Token.sol";
+import "./ERC865.sol";
 import "./ERC677Receiver.sol";
+import "./libraries/Message.sol";
 
 
 contract ERC677BridgeToken is
     IBurnableMintableERC677Token,
     DetailedERC20,
     BurnableToken,
-    MintableToken {
+    MintableToken,
+    ERC865 {
 
     address public bridgeContract;
 
@@ -104,5 +107,67 @@ contract ERC677BridgeToken is
         require(token.transfer(_to, balance));
     }
 
+    function transferWithFee(address _sender, address _from, address _to, uint256 _value, uint256 _fee) internal returns(bool)
+    {
+        balances[_from] = balances[_from].sub(_value).sub(_fee);
+        balances[_to] = balances[_to].add(_value);
+        balances[_sender] = balances[_sender].add(_fee);
+        emit Transfer(_from, _to, _value);
+        emit Transfer(_from, _sender, _fee);
+        return true;
+    }
 
+    function contractFallbackFrom(address _from, address _to, uint _value, bytes _data) private returns(bool)
+    {
+        return _to.call(abi.encodeWithSignature("onTokenTransfer(address,uint256,bytes)",  _from, _value, _data));
+    }
+
+    function transferPreSigned(bytes _signature, address _to, uint256 _value, uint256 _fee, uint256 _timestamp) validRecipient(_to) public returns (bool) {
+        bytes32 hashedParams = getTransferPreSignedHash(address(this), _to, _value, _fee, _timestamp);
+        address from = Message.recover(hashedParams, _signature);
+        require(from != address(0), "Invalid from address recovered");
+        bytes32 hashedTx = keccak256(abi.encodePacked(from, hashedParams));
+        require(hashedTxs[hashedTx] == false, "Transaction hash was already used");
+
+        require(transferWithFee(msg.sender, from, _to, _value, _fee));
+        hashedTxs[hashedTx] = true;
+        emit TransferPreSigned(from, _to, msg.sender, _value, _fee);
+
+        if (isContract(_to) && !contractFallbackFrom(from, _to, _value, new bytes(0))) {
+            if (_to == bridgeContract) {
+                revert();
+            } else {
+                emit ContractFallbackCallFailed(from, _to, _value);
+            }
+        }
+
+        return true;
+    }
+
+    function getTransferPreSignedHash(address _token, address _to, uint256 _value, uint256 _fee, uint256 _timestamp) public pure returns (bytes32) {
+        /* "0d98dcb1": getTransferPreSignedHash(address,address,uint256,uint256,uint256) */
+        return keccak256(abi.encodePacked(bytes4(0x0d98dcb1), _token, _to, _value, _fee, _timestamp));
+    }
+
+    function transferAndCallPreSigned(bytes _signature, address _to, uint256 _value, bytes _data, uint256 _fee, uint256 _timestamp) validRecipient(_to) public returns (bool) {
+        bytes32 hashedParams = getTransferAndCallPreSignedHash(address(this), _to, _value, _data, _fee, _timestamp);
+        address from = Message.recover(hashedParams, _signature);
+        require(from != address(0), "Invalid from address recovered");
+        bytes32 hashedTx = keccak256(abi.encodePacked(from, hashedParams));
+        require(hashedTxs[hashedTx] == false, "Transaction hash was already used");
+
+        require(transferWithFee(msg.sender, from, _to, _value, _fee));
+        hashedTxs[hashedTx] = true;
+        emit TransferAndCallPreSigned(from, _to, msg.sender, _value, _data, _fee);
+
+        if (isContract(_to)) {
+            require(contractFallbackFrom(from, _to, _value, _data));
+        }
+        return true;
+    }
+
+    function getTransferAndCallPreSignedHash(address _token, address _to, uint256 _value, bytes _data, uint256 _fee, uint256 _timestamp) public pure returns (bytes32) {
+        /* "cabc0a10": getTransferPreSignedHash(address,address,uint256,uint256,uint256) */
+        return keccak256(abi.encodePacked(bytes4(0xcabc0a10), _token, _to, _value, _data, _fee, _timestamp));
+    }
 }
