@@ -1,11 +1,10 @@
 pragma solidity 0.4.24;
-import "../../libraries/SafeMath.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../../libraries/Message.sol";
 import "../BasicBridge.sol";
 import "../BasicForeignBridge.sol";
-import "../../IBurnableMintableERC677Token.sol";
 import "../../ERC677Receiver.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/ERC20Basic.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 
 contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge {
@@ -50,8 +49,8 @@ contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge {
         super.claimTokens(_token, _to);
     }
 
-    function erc20token() public view returns(ERC20Basic) {
-        return ERC20Basic(addressStorage[keccak256(abi.encodePacked("erc20token"))]);
+    function erc20token() public view returns(IERC20) {
+        return IERC20(addressStorage[keccak256(abi.encodePacked("erc20token"))]);
     }
 
     function onExecuteMessage(address _recipient, uint256 _amount) internal returns(bool){

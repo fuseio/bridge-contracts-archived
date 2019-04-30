@@ -1,8 +1,9 @@
 pragma solidity 0.4.24;
 
-import "openzeppelin-solidity/contracts/token/ERC20/BurnableToken.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/MintableToken.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/DetailedERC20.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20Burnable.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20Mintable.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./IBurnableMintableERC677Token.sol";
 import "./ERC865.sol";
 import "./ERC677Receiver.sol";
@@ -11,9 +12,10 @@ import "./libraries/Message.sol";
 
 contract ERC677BridgeToken is
     IBurnableMintableERC677Token,
-    DetailedERC20,
-    BurnableToken,
-    MintableToken,
+    ERC20Detailed,
+    ERC20Burnable,
+    ERC20Mintable,
+    Ownable,
     ERC865 {
 
     address public bridgeContract;
@@ -24,9 +26,9 @@ contract ERC677BridgeToken is
         string _name,
         string _symbol,
         uint8 _decimals)
-    public DetailedERC20(_name, _symbol, _decimals) {}
+    public ERC20Detailed(_name, _symbol, _decimals) {}
 
-    function setBridgeContract(address _bridgeContract) onlyOwner public {
+    function setBridgeContract(address _bridgeContract) onlyMinter public {
         require(_bridgeContract != address(0) && isContract(_bridgeContract));
         bridgeContract = _bridgeContract;
     }
@@ -49,7 +51,7 @@ contract ERC677BridgeToken is
     }
 
     function getTokenInterfacesVersion() public pure returns(uint64 major, uint64 minor, uint64 patch) {
-        return (2, 0, 0);
+        return (3, 0, 0);
     }
 
     function superTransfer(address _to, uint256 _value) internal returns(bool)
@@ -57,6 +59,12 @@ contract ERC677BridgeToken is
         return super.transfer(_to, _value);
     }
 
+    /**
+   * @dev ERC20 transfer with a contract fallback.
+   * Contract fallback to bridge is a special, That's the transfer to other network
+   * @param _to The address to transfer to.
+   * @param _value The amount to be transferred.
+   */
     function transfer(address _to, uint256 _value) public returns (bool)
     {
         require(superTransfer(_to, _value));
@@ -87,14 +95,15 @@ contract ERC677BridgeToken is
         return length > 0;
     }
 
-    function finishMinting() public returns (bool) {
-        revert();
-    }
-
     function renounceOwnership() public onlyOwner {
         revert();
     }
 
+    /**
+   * @dev Claims token or ether sent by mistake to the token contract
+   * @param _token The address to the token sent a null for ether.
+   * @param _to The address to to sent the tokens.
+   */
     function claimTokens(address _token, address _to) public onlyOwner {
         require(_to != address(0));
         if (_token == address(0)) {
@@ -102,18 +111,15 @@ contract ERC677BridgeToken is
             return;
         }
 
-        DetailedERC20 token = DetailedERC20(_token);
+        ERC20Detailed token = ERC20Detailed(_token);
         uint256 balance = token.balanceOf(address(this));
         require(token.transfer(_to, balance));
     }
 
     function transferWithFee(address _sender, address _from, address _to, uint256 _value, uint256 _fee) internal returns(bool)
     {
-        balances[_from] = balances[_from].sub(_value).sub(_fee);
-        balances[_to] = balances[_to].add(_value);
-        balances[_sender] = balances[_sender].add(_fee);
-        emit Transfer(_from, _to, _value);
-        emit Transfer(_from, _sender, _fee);
+        _transfer(_from, _to, _value);
+        _transfer(_from, _sender, _fee);
         return true;
     }
 
