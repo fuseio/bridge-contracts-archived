@@ -4,4 +4,6 @@ flats
 .node*
 deploy/bridgeDeploymentOutput.txt
 
-.vscode/
+.DS_Store
+
+.vscode

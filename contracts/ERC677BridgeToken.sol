@@ -8,10 +8,12 @@ import "./IBurnableMintableERC677Token.sol";
 import "./ERC865.sol";
 import "./ERC677Receiver.sol";
 import "./libraries/Message.sol";
-
+import "./ITransferManager.sol";
+import "./IRestrictedToken.sol";
 
 contract ERC677BridgeToken is
     IBurnableMintableERC677Token,
+    IRestrictedToken,
     ERC20Detailed,
     ERC20Burnable,
     ERC20Mintable,
@@ -19,6 +21,7 @@ contract ERC677BridgeToken is
     ERC865 {
 
     address public bridgeContract;
+    ITransferManager public transferManager;
 
     event ContractFallbackCallFailed(address from, address to, uint value);
 
@@ -33,9 +36,24 @@ contract ERC677BridgeToken is
         bridgeContract = _bridgeContract;
     }
 
+    function setTransferManager(address _transferManager) onlyOwner public {
+        require(_transferManager != address(0) && isContract(_transferManager));
+        transferManager = ITransferManager(_transferManager);
+
+        emit TransferManagerSet(_transferManager);
+    }
+
     modifier validRecipient(address _recipient) {
         require(_recipient != address(0) && _recipient != address(this));
         _;
+    }
+
+    function verifyTransfer(address _from, address _to, uint256 _value) public view returns (bool) {
+      if (transferManager != address(0)) {
+        return transferManager.verifyTransfer(_from, _to, _value);
+      } else {
+        return true;
+      }
     }
 
     function transferAndCall(address _to, uint _value, bytes _data)
@@ -56,6 +74,7 @@ contract ERC677BridgeToken is
 
     function superTransfer(address _to, uint256 _value) internal returns(bool)
     {
+        require(verifyTransfer(msg.sender, _to, _value));
         return super.transfer(_to, _value);
     }
 
@@ -118,6 +137,8 @@ contract ERC677BridgeToken is
 
     function transferWithFee(address _sender, address _from, address _to, uint256 _value, uint256 _fee) internal returns(bool)
     {
+        require(verifyTransfer(_from, _to, _value));
+        require(verifyTransfer(_from, _sender, _fee));
         _transfer(_from, _to, _value);
         _transfer(_from, _sender, _fee);
         return true;
