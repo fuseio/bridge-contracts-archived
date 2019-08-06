@@ -356,7 +356,7 @@ GET_RECEIPT_INTERVAL_IN_MILLISECONDS=3000
 
 # The RPC channel to a Home node able to handle deployment/configuration
 # transactions.
-HOME_RPC_URL=https://rpc.fuse.io
+HOME_RPC_URL=https://rpc.fusenet.io
 # The address of an administrator on the Home network who can change bridge
 # parameters and a validator's contract. For extra security we recommended using
 HOME_BRIDGE_OWNER=0x
