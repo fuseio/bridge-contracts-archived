@@ -53,9 +53,13 @@ contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge {
         return IERC20(addressStorage[keccak256(abi.encodePacked("erc20token"))]);
     }
 
-    function onExecuteMessage(address _recipient, uint256 _amount) internal returns(bool){
+    function onExecuteMessage(address _recipient, uint256 _amount) internal returns(bool) {
         setTotalExecutedPerDay(getCurrentDay(), totalExecutedPerDay(getCurrentDay()).add(_amount));
         return erc20token().transfer(_recipient, _amount);
+    }
+
+    function mintOnExecuteMessage(address _recipient, uint256 _amount) internal returns(bool) {
+        revert();
     }
 
     function setErc20token(address _token) private {

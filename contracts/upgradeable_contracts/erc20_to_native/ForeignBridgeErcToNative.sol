@@ -57,6 +57,10 @@ contract ForeignBridgeErcToNative is BasicBridge, BasicForeignBridge {
         return erc20token().transfer(_recipient, _amount);
     }
 
+    function mintOnExecuteMessage(address _recipient, uint256 _amount) internal returns(bool) {
+        revert();
+    }
+
     function setErc20token(address _token) private {
         require(_token != address(0) && isContract(_token));
         addressStorage[keccak256(abi.encodePacked("erc20token"))] = _token;

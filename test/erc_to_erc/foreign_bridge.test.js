@@ -26,7 +26,7 @@ contract('ForeignBridge_ERC20_to_ERC20', async (accounts) => {
   describe('#initialize', async () => {
     it('should initialize', async () => {
       token = await ERC677BridgeToken.new("Some ERC20", "RSZT", 18);
-      let foreignBridge =  await ForeignBridge.new();
+      let foreignBridge = await ForeignBridge.new();
 
       ZERO_ADDRESS.should.be.equal(await foreignBridge.erc20token());
       ZERO_ADDRESS.should.be.equal(await foreignBridge.validatorContract())

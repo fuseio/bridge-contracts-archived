@@ -30,7 +30,8 @@ const getEvents = function(contract, filter) {
       event.stopWatching();
   });
 }
-contract('ForeignBridge', async (accounts) => {
+
+contract('ForeignBridge_Native_to_ERC20', async (accounts) => {
   let validatorContract, authorities, owner, token;
   before(async () => {
     validatorContract = await BridgeValidators.new()
@@ -72,6 +73,7 @@ contract('ForeignBridge', async (accounts) => {
       patch.should.be.bignumber.gte(0)
     })
   })
+
   describe('#executeSignatures', async () => {
     beforeEach(async () => {
       foreignBridge = await ForeignBridge.new()
@@ -225,7 +227,6 @@ contract('ForeignBridge', async (accounts) => {
       await token.renounceMinter();
     })
     it('deposit should fail if not enough signatures are provided', async () => {
-
       var recipientAccount = accounts[4];
       const balanceBefore = await web3.eth.getBalance(recipientAccount)
       const homeBalanceBefore = await web3.eth.getBalance(foreignBridgeWithMultiSignatures.address)
@@ -303,6 +304,139 @@ contract('ForeignBridge', async (accounts) => {
     })
   })
 
+  describe('#executeSignatures --> mintOnExecuteMessage', function() {
+    beforeEach(async () => {
+      foreignBridge = await ForeignBridge.new()
+      token = await POA20.new("POA ERC20 Foundation", "POA20", 18);
+      const oneEther = web3.toBigNumber(web3.toWei(1, "ether"));
+      const halfEther = web3.toBigNumber(web3.toWei(0.5, "ether"));
+      await foreignBridge.initialize(validatorContract.address, token.address, oneEther, halfEther, minPerTx, gasPrice, requireBlockConfirmations, homeDailyLimit, homeMaxPerTx, owner, erc677tokenPreMinted);
+      oneEther.should.be.bignumber.equal(await foreignBridge.dailyLimit());
+
+      await token.addMinter(foreignBridge.address);
+      await token.renounceMinter();
+    })
+    it('should allow to deposit', async () => {
+      const recipientAccount = foreignBridge.address;
+      const balanceBefore = await token.balanceOf(recipientAccount)
+      const totalSupplyBefore = await token.totalSupply()
+      var value = web3.toBigNumber(web3.toWei(0.25, "ether"));
+      var transactionHash = "0x1045bfe274b88120a6b1e5d01b5ec00ab5d01098346e90e7c7a3c9b8f0181c80";
+      var message = createMessage(recipientAccount, value, transactionHash, foreignBridge.address);
+      var signature = await sign(authorities[0], message)
+      var vrs = signatureToVRS(signature);
+      false.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      const {logs} = await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.fulfilled
+      logs[0].event.should.be.equal("RelayedMessage")
+      logs[0].args.recipient.should.be.equal(recipientAccount)
+      logs[0].args.value.should.be.bignumber.equal(value)
+      logs[0].args.transactionHash.should.be.equal(transactionHash);
+
+      const balanceAfter = await token.balanceOf(recipientAccount);
+      const totalSupplyAfter = await token.totalSupply();
+      balanceAfter.should.be.bignumber.equal(balanceBefore.add(value))
+      totalSupplyAfter.should.be.bignumber.equal(totalSupplyBefore.add(value))
+      true.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+    })
+    it('should reject if address is not foreign address', async () => {
+      const recipientAccount = foreignBridge.address;
+      const balanceBefore = await token.balanceOf(recipientAccount)
+      const totalSupplyBefore = await token.totalSupply()
+      var value = web3.toBigNumber(web3.toWei(0.25, "ether"));
+      var transactionHash = "0x1045bfe274b88120a6b1e5d01b5ec00ab5d01098346e90e7c7a3c9b8f0181c80";
+      var message = createMessage(foreignBridge.address, value, transactionHash, accounts[0]);
+      var signature = await sign(authorities[0], message)
+      var vrs = signatureToVRS(signature);
+      false.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.rejectedWith(ERROR_MSG)
+
+    })
+    it('should allow second deposit with different transactionHash but same recipient and value', async ()=> {
+      const recipientAccount = foreignBridge.address;
+      const balanceBefore = await token.balanceOf(recipientAccount)
+      // tx 1
+      var value = web3.toBigNumber(web3.toWei(0.25, "ether"));
+      var homeGasPrice = web3.toBigNumber(0);
+      var transactionHash = "0x35d3818e50234655f6aebb2a1cfbf30f59568d8a4ec72066fac5a25dbe7b8121";
+      var message = createMessage(recipientAccount, value, transactionHash, foreignBridge.address);
+      var signature = await sign(authorities[0], message)
+      var vrs = signatureToVRS(signature);
+      false.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.fulfilled
+      // tx 2
+      var transactionHash2 = "0x77a496628a776a03d58d7e6059a5937f04bebd8ba4ff89f76dd4bb8ba7e291ee";
+      var message2 = createMessage(foreignBridge.address, value, transactionHash2, foreignBridge.address);
+      var signature2 = await sign(authorities[0], message2)
+      var vrs2 = signatureToVRS(signature2);
+      false.should.be.equal(await foreignBridge.relayedMessages(transactionHash2))
+      const {logs} = await foreignBridge.executeSignatures([vrs2.v], [vrs2.r], [vrs2.s], message2).should.be.fulfilled
+
+      logs[0].event.should.be.equal("RelayedMessage")
+      logs[0].args.recipient.should.be.equal(recipientAccount)
+      logs[0].args.value.should.be.bignumber.equal(value)
+      logs[0].args.transactionHash.should.be.equal(transactionHash2);
+      const totalSupply = await token.totalSupply()
+      const balanceAfter = await token.balanceOf(recipientAccount)
+      balanceAfter.should.be.bignumber.equal(balanceBefore.add(value.mul(2)))
+      totalSupply.should.be.bignumber.equal(value.mul(2))
+      true.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      true.should.be.equal(await foreignBridge.relayedMessages(transactionHash2))
+    })
+    it('should not allow second deposit (replay attack) with same transactionHash but different recipient', async () => {
+      const recipientAccount = foreignBridge.address;
+      const balanceBefore = await token.balanceOf(recipientAccount)
+      // tx 1
+      var value = web3.toBigNumber(web3.toWei(0.5, "ether"));
+      var homeGasPrice = web3.toBigNumber(0);
+      var transactionHash = "0x35d3818e50234655f6aebb2a1cfbf30f59568d8a4ec72066fac5a25dbe7b8121";
+      var message = createMessage(recipientAccount, value, transactionHash, foreignBridge.address);
+      var signature = await sign(authorities[0], message)
+      var vrs = signatureToVRS(signature);
+      false.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.fulfilled
+      // tx 2
+      var message2 = createMessage(accounts[4], value, transactionHash, foreignBridge.address);
+      var signature2 = await sign(authorities[0], message2)
+      var vrs = signatureToVRS(signature2);
+      true.should.be.equal(await foreignBridge.relayedMessages(transactionHash))
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message2).should.be.rejectedWith(ERROR_MSG)
+    })
+    it('should not allow withdraw over home max tx limit', async () => {
+      const recipientAccount = foreignBridge.address;
+      const invalidValue = web3.toBigNumber(web3.toWei(0.75, "ether"));
+
+      const transactionHash = "0x35d3818e50234655f6aebb2a1cfbf30f59568d8a4ec72066fac5a25dbe7b8121";
+      const message = createMessage(foreignBridge.address, invalidValue, transactionHash, foreignBridge.address);
+      const signature = await sign(authorities[0], message)
+      const vrs = signatureToVRS(signature);
+
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.rejectedWith(ERROR_MSG)
+    })
+    it('should allow withdraw over daily home limit', async () => {
+      const recipientAccount = foreignBridge.address;
+
+      const transactionHash = "0x35d3818e50234655f6aebb2a1cfbf30f59568d8a4ec72066fac5a25dbe7b8121";
+      const message = createMessage(foreignBridge.address, halfEther, transactionHash, foreignBridge.address);
+      const signature = await sign(authorities[0], message)
+      const vrs = signatureToVRS(signature);
+
+      await foreignBridge.executeSignatures([vrs.v], [vrs.r], [vrs.s], message).should.be.fulfilled
+
+      const transactionHash2 = "0x69debd8fd1923c9cb3cd8ef6461e2740b2d037943b941729d5a47671a2bb8712";
+      const message2 = createMessage(foreignBridge.address, halfEther, transactionHash2, foreignBridge.address);
+      const signature2 = await sign(authorities[0], message2)
+      const vrs2 = signatureToVRS(signature2);
+
+      await foreignBridge.executeSignatures([vrs2.v], [vrs2.r], [vrs2.s], message2).should.be.fulfilled
+
+      const transactionHash3 = "0x022695428093bb292db8e48bd1417c5e1b84c0bf673bd0fff23ed0fb6495b872";
+      const message3 = createMessage(foreignBridge.address, halfEther, transactionHash3, foreignBridge.address);
+      const signature3 = await sign(authorities[0], message3)
+      const vrs3 = signatureToVRS(signature3);
+
+      await foreignBridge.executeSignatures([vrs3.v], [vrs3.r], [vrs3.s], message3).should.be.fulfilled
+    })
+  })
 
   describe('#onTokenTransfer', async () => {
     it('can only be called from token contract', async ()=> {

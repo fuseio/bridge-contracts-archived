@@ -14,7 +14,7 @@ const halfEther = web3.toBigNumber(web3.toWei(0.5, "ether"));
 const foreignDailyLimit = oneEther
 const foreignMaxPerTx = halfEther
 
-contract('HomeBridge', async (accounts) => {
+contract('HomeBridge_Native_to_ERC20', async (accounts) => {
   let homeContract, validatorContract, authorities, owner;
   before(async () => {
     validatorContract = await BridgeValidators.new()

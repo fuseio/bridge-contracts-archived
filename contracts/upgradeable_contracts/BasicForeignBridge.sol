@@ -20,7 +20,11 @@ contract BasicForeignBridge is EternalStorage, Validatable {
             require(contractAddress == address(this));
             require(!relayedMessages(txHash));
             setRelayedMessages(txHash, true);
-            require(onExecuteMessage(recipient, amount));
+            if (recipient == address(this)) {
+                require(mintOnExecuteMessage(recipient, amount));
+            } else {
+                require(onExecuteMessage(recipient, amount));
+            }
             emit RelayedMessage(recipient, amount, txHash);
         } else {
             onFailedMessage(recipient, amount, txHash);
@@ -28,6 +32,8 @@ contract BasicForeignBridge is EternalStorage, Validatable {
     }
 
     function onExecuteMessage(address, uint256) internal returns(bool);
+
+    function mintOnExecuteMessage(address, uint256) internal returns(bool);
 
     function setRelayedMessages(bytes32 _txHash, bool _status) internal {
         boolStorage[keccak256(abi.encodePacked("relayedMessages", _txHash))] = _status;
