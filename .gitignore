@@ -1,6 +1,7 @@
 node_modules
 build
 flats
+abis
 .node*
 deploy/bridgeDeploymentOutput.txt
 

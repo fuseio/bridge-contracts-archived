@@ -1,28 +1,9 @@
 pragma solidity 0.4.24;
 import "../IBridgeValidators.sol";
+import "../IForeignBridgeValidators.sol";
 
 
 library Message {
-    // function uintToString(uint256 inputValue) internal pure returns (string) {
-    //     // figure out the length of the resulting string
-    //     uint256 length = 0;
-    //     uint256 currentValue = inputValue;
-    //     do {
-    //         length++;
-    //         currentValue /= 10;
-    //     } while (currentValue != 0);
-    //     // allocate enough memory
-    //     bytes memory result = new bytes(length);
-    //     // construct the string backwards
-    //     uint256 i = length - 1;
-    //     currentValue = inputValue;
-    //     do {
-    //         result[i--] = byte(48 + currentValue % 10);
-    //         currentValue /= 10;
-    //     } while (currentValue != 0);
-    //     return string(result);
-    // }
-
     function addressArrayContains(address[] array, address value) internal pure returns (bool) {
         for (uint256 i = 0; i < array.length; i++) {
             if (array[i] == value) {
@@ -62,6 +43,33 @@ library Message {
         }
     }
 
+    function parseNewSetMessage(bytes message)
+        internal
+        returns(address[] memory newSet, bytes32 txHash, address contractAddress)
+    {
+        uint256 msgLength;
+        uint256 position;
+        address newSetMember;
+        assembly {
+            msgLength := mload(message)
+            txHash := mload(add(message, 32))
+            contractAddress := mload(add(message, 52))
+            position := 72
+        }
+        uint256 newSetLength = (msgLength - position) / 20 + 1;
+        newSet = new address[](newSetLength);
+        uint256 i = 0;
+        while (position <= msgLength) {
+            assembly {
+                newSetMember := mload(add(message, position))
+            }
+            newSet[i] = newSetMember;
+            position += 20;
+            i++;
+        }
+        return (newSet, txHash, contractAddress);
+    }
+
     function isMessageValid(bytes _msg) internal pure returns(bool) {
         return _msg.length == requiredMessageLength();
     }
@@ -70,7 +78,7 @@ library Message {
         return 104;
     }
 
-    function recoverAddressFromSignedMessage(bytes signature, bytes message) internal pure returns (address) {
+    function recoverAddressFromSignedMessage(bytes signature, bytes message, bool knownLength) internal pure returns (address) {
         require(signature.length == 65);
         bytes32 r;
         bytes32 s;
@@ -81,7 +89,11 @@ library Message {
             s := mload(add(signature, 0x40))
             v := mload(add(signature, 0x60))
         }
-        return ecrecover(hashMessage(message), uint8(v), r, s);
+        if (knownLength) {
+            return ecrecover(hashMessage(message), uint8(v), r, s);
+        } else {
+            return ecrecover(hashMessageOfUnknownLength(message), uint8(v), r, s);
+        }
     }
 
     function hashMessage(bytes message) internal pure returns (bytes32) {
@@ -91,16 +103,111 @@ library Message {
         return keccak256(abi.encodePacked(prefix, msgLength, message));
     }
 
+    function hashMessageOfUnknownLength(bytes message) internal pure returns (bytes32) {
+        bytes memory prefix = "\x19Ethereum Signed Message:\n";
+        uint256 lengthOffset;
+        uint256 length;
+        assembly {
+          // The first word of a string is its length
+          length := mload(message)
+          // The beginning of the base-10 message length in the prefix
+          lengthOffset := add(prefix, 57)
+        }
+        uint256 lengthLength = 0;
+        // The divisor to get the next left-most message length digit
+        uint256 divisor = 100000;
+        // Move one digit of the message length to the right at a time
+        while (divisor != 0) {
+          // The place value at the divisor
+          uint256 digit = length / divisor;
+          if (digit == 0) {
+            // Skip leading zeros
+            if (lengthLength == 0) {
+              divisor /= 10;
+              continue;
+            }
+          }
+          // Found a non-zero digit or non-leading zero digit
+          lengthLength++;
+          // Remove this digit from the message length's current value
+          length -= digit * divisor;
+          // Shift our base-10 divisor over
+          divisor /= 10;
+          // Convert the digit to its ASCII representation (man ascii)
+          digit += 0x30;
+          // Move to the next character and write the digit
+          lengthOffset++;
+          assembly {
+            mstore8(lengthOffset, digit)
+          }
+        }
+        // The null string requires exactly 1 zero (unskip 1 leading 0)
+        if (lengthLength == 0) {
+          lengthLength = 1 + 0x19 + 1;
+        } else {
+          lengthLength += 1 + 0x19;
+        }
+        // Truncate the tailing zeros from the prefix
+        assembly {
+          mstore(prefix, lengthLength)
+        }
+        return keccak256(prefix, message);
+    }
+
     function hasEnoughValidSignatures(
         bytes _message,
         uint8[] _vs,
         bytes32[] _rs,
         bytes32[] _ss,
-        IBridgeValidators _validatorContract) internal view {
-        require(isMessageValid(_message));
+        IBridgeValidators _validatorContract) internal view
+    {
         uint256 requiredSignatures = _validatorContract.requiredSignatures();
         require(_vs.length >= requiredSignatures);
         bytes32 hash = hashMessage(_message);
+        address[] memory encounteredAddresses = new address[](requiredSignatures);
+
+        for (uint256 i = 0; i < requiredSignatures; i++) {
+            address recoveredAddress = ecrecover(hash, _vs[i], _rs[i], _ss[i]);
+            require(_validatorContract.isValidator(recoveredAddress));
+            if (addressArrayContains(encounteredAddresses, recoveredAddress)) {
+                revert();
+            }
+            encounteredAddresses[i] = recoveredAddress;
+        }
+    }
+
+    function hasEnoughValidSignaturesForeignBridgeValidator(
+        bytes _message,
+        uint8[] _vs,
+        bytes32[] _rs,
+        bytes32[] _ss,
+        IForeignBridgeValidators _validatorContract) internal view
+    {
+        uint256 requiredSignatures = _validatorContract.requiredSignatures();
+        require(_vs.length >= requiredSignatures);
+        bytes32 hash = hashMessage(_message);
+        address[] memory encounteredAddresses = new address[](requiredSignatures);
+
+        for (uint256 i = 0; i < requiredSignatures; i++) {
+            address recoveredAddress = ecrecover(hash, _vs[i], _rs[i], _ss[i]);
+            require(_validatorContract.isValidator(recoveredAddress));
+            if (addressArrayContains(encounteredAddresses, recoveredAddress)) {
+                revert();
+            }
+            encounteredAddresses[i] = recoveredAddress;
+        }
+    }
+
+    function hasEnoughValidNewSetSignaturesForeignBridgeValidator(
+        bytes _message,
+        uint8[] _vs,
+        bytes32[] _rs,
+        bytes32[] _ss,
+        IForeignBridgeValidators _validatorContract) internal view
+    {
+        uint256 requiredSignatures = _validatorContract.requiredSignatures();
+        require(_vs.length >= requiredSignatures);
+        bytes32 hash = hashMessageOfUnknownLength(_message);
         address[] memory encounteredAddresses = new address[](requiredSignatures);
 
         for (uint256 i = 0; i < requiredSignatures; i++) {

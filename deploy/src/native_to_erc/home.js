@@ -9,19 +9,20 @@ const EternalStorageProxy = require('../../../build/contracts/EternalStorageProx
 const BridgeValidators = require('../../../build/contracts/BridgeValidators.json')
 const HomeBridge = require('../../../build/contracts/HomeBridgeNativeToErc.json')
 
+const HomeConsensusABI = require('../../abis/HomeConsensus.abi.json')
+
 const VALIDATORS = env.VALIDATORS.split(' ')
 
 const {
   DEPLOYMENT_ACCOUNT_PRIVATE_KEY,
-  REQUIRED_NUMBER_OF_VALIDATORS,
   HOME_GAS_PRICE,
   HOME_BRIDGE_OWNER,
-  HOME_VALIDATORS_OWNER,
   HOME_UPGRADEABLE_ADMIN,
   HOME_DAILY_LIMIT,
   HOME_MAX_AMOUNT_PER_TX,
   HOME_MIN_AMOUNT_PER_TX,
   HOME_REQUIRED_BLOCK_CONFIRMATIONS,
+  HOME_CONSENSUS_ADDRESS,
   FOREIGN_DAILY_LIMIT,
   FOREIGN_MAX_AMOUNT_PER_TX
 } = env
@@ -30,69 +31,11 @@ const DEPLOYMENT_ACCOUNT_ADDRESS = privateKeyToAddress(DEPLOYMENT_ACCOUNT_PRIVAT
 
 async function deployHome() {
   let homeNonce = await web3Home.eth.getTransactionCount(DEPLOYMENT_ACCOUNT_ADDRESS)
-  console.log('deploying storage for home validators')
-  const storageValidatorsHome = await deployContract(EternalStorageProxy, [], {
-    from: DEPLOYMENT_ACCOUNT_ADDRESS,
-    nonce: homeNonce
-  })
-  console.log('[Home] BridgeValidators Storage: ', storageValidatorsHome.options.address)
-  homeNonce++
+  console.log('\n========================================')
+  console.log('deploying HomeBridge')
+  console.log('========================================')
 
-  console.log('\ndeploying implementation for home validators')
-  const bridgeValidatorsHome = await deployContract(BridgeValidators, [], {
-    from: DEPLOYMENT_ACCOUNT_ADDRESS,
-    nonce: homeNonce
-  })
-  console.log('[Home] BridgeValidators Implementation: ', bridgeValidatorsHome.options.address)
-  homeNonce++
-
-  console.log('\nhooking up eternal storage to BridgeValidators')
-  const upgradeToBridgeVHomeData = await storageValidatorsHome.methods
-    .upgradeTo('1', bridgeValidatorsHome.options.address)
-    .encodeABI({ from: DEPLOYMENT_ACCOUNT_ADDRESS })
-  const txUpgradeToBridgeVHome = await sendRawTxHome({
-    data: upgradeToBridgeVHomeData,
-    nonce: homeNonce,
-    to: storageValidatorsHome.options.address,
-    privateKey: deploymentPrivateKey,
-    url: HOME_RPC_URL
-  })
-  assert.strictEqual(Web3Utils.hexToNumber(txUpgradeToBridgeVHome.status), 1, 'Transaction Failed')
-  homeNonce++
-
-  console.log('\ninitializing Home Bridge Validators with following parameters:\n')
-  console.log(
-    `REQUIRED_NUMBER_OF_VALIDATORS: ${REQUIRED_NUMBER_OF_VALIDATORS}, VALIDATORS: ${VALIDATORS}`
-  )
-  bridgeValidatorsHome.options.address = storageValidatorsHome.options.address
-  const initializeData = await bridgeValidatorsHome.methods
-    .initialize(REQUIRED_NUMBER_OF_VALIDATORS, VALIDATORS, HOME_VALIDATORS_OWNER)
-    .encodeABI({ from: DEPLOYMENT_ACCOUNT_ADDRESS })
-  const txInitialize = await sendRawTxHome({
-    data: initializeData,
-    nonce: homeNonce,
-    to: bridgeValidatorsHome.options.address,
-    privateKey: deploymentPrivateKey,
-    url: HOME_RPC_URL
-  })
-  assert.strictEqual(Web3Utils.hexToNumber(txInitialize.status), 1, 'Transaction Failed')
-  homeNonce++
-
-  console.log('transferring proxy ownership to multisig for Validators Proxy contract')
-  const proxyDataTransfer = await storageValidatorsHome.methods
-    .transferProxyOwnership(HOME_UPGRADEABLE_ADMIN)
-    .encodeABI()
-  const txProxyDataTransfer = await sendRawTxHome({
-    data: proxyDataTransfer,
-    nonce: homeNonce,
-    to: storageValidatorsHome.options.address,
-    privateKey: deploymentPrivateKey,
-    url: HOME_RPC_URL
-  })
-  assert.strictEqual(Web3Utils.hexToNumber(txProxyDataTransfer.status), 1, 'Transaction Failed')
-  homeNonce++
-
-  console.log('\ndeploying homeBridge storage\n')
+  console.log('\ndeploying homeBridge storage')
   const homeBridgeStorage = await deployContract(EternalStorageProxy, [], {
     from: DEPLOYMENT_ACCOUNT_ADDRESS,
     nonce: homeNonce
@@ -100,7 +43,7 @@ async function deployHome() {
   homeNonce++
   console.log('[Home] HomeBridge Storage: ', homeBridgeStorage.options.address)
 
-  console.log('\ndeploying homeBridge implementation\n')
+  console.log('\ndeploying homeBridge implementation')
   const homeBridgeImplementation = await deployContract(HomeBridge, [], {
     from: DEPLOYMENT_ACCOUNT_ADDRESS,
     nonce: homeNonce
@@ -122,8 +65,11 @@ async function deployHome() {
   assert.strictEqual(Web3Utils.hexToNumber(txUpgradeToHomeBridge.status), 1, 'Transaction Failed')
   homeNonce++
 
-  console.log('\ninitializing Home Bridge with following parameters:\n')
-  console.log(`Home Validators: ${storageValidatorsHome.options.address},
+  const consensus = new web3Home.eth.Contract(HomeConsensusABI, HOME_CONSENSUS_ADDRESS)
+
+  console.log('\ninitializing Home Bridge with following parameters:')
+  console.log(`
+  HOME_CONSENSUS: ${consensus.options.address},
   HOME_DAILY_LIMIT : ${HOME_DAILY_LIMIT} which is ${Web3Utils.fromWei(HOME_DAILY_LIMIT)} in eth,
   HOME_MAX_AMOUNT_PER_TX: ${HOME_MAX_AMOUNT_PER_TX} which is ${Web3Utils.fromWei(
     HOME_MAX_AMOUNT_PER_TX
@@ -136,7 +82,7 @@ async function deployHome() {
   homeBridgeImplementation.options.address = homeBridgeStorage.options.address
   const initializeHomeBridgeData = await homeBridgeImplementation.methods
     .initialize(
-      storageValidatorsHome.options.address,
+      consensus.options.address,
       HOME_DAILY_LIMIT,
       HOME_MAX_AMOUNT_PER_TX,
       HOME_MIN_AMOUNT_PER_TX,
@@ -157,7 +103,7 @@ async function deployHome() {
   assert.strictEqual(Web3Utils.hexToNumber(txInitializeHomeBridge.status), 1, 'Transaction Failed')
   homeNonce++
 
-  console.log('transferring proxy ownership to multisig for Home bridge Proxy contract')
+  console.log('\ntransferring proxy ownership to multisig for Home bridge Proxy contract')
   const homeBridgeProxyData = await homeBridgeStorage.methods
     .transferProxyOwnership(HOME_UPGRADEABLE_ADMIN)
     .encodeABI()
@@ -171,7 +117,7 @@ async function deployHome() {
   assert.strictEqual(Web3Utils.hexToNumber(txhomeBridgeProxyData.status), 1, 'Transaction Failed')
   homeNonce++
 
-  console.log('\nHome Deployment Bridge completed\n')
+  console.log('\nHome Deployment Bridge completed')
   return {
     homeBridge: {
       address: homeBridgeStorage.options.address,

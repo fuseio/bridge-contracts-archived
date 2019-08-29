@@ -3,12 +3,11 @@ import "../IBridgeValidators.sol";
 import "./OwnedUpgradeability.sol";
 import "../upgradeability/EternalStorage.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "./Validatable.sol";
 import "./EternalOwnable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 
-contract BasicBridge is EternalStorage, Validatable, EternalOwnable, OwnedUpgradeability {
+contract BasicBridge is EternalStorage, EternalOwnable, OwnedUpgradeability {
     using SafeMath for uint256;
 
     event GasPriceChanged(uint256 gasPrice);

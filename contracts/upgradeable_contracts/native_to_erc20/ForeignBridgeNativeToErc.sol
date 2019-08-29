@@ -3,13 +3,16 @@ import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../BasicBridge.sol";
 import "../../ERC677Receiver.sol";
 import "../BasicForeignBridge.sol";
+import "./ForeignValidatable.sol";
 import "../ERC677Bridge.sol";
 
 
-contract ForeignBridgeNativeToErc is ERC677Receiver, BasicBridge, BasicForeignBridge, ERC677Bridge {
+contract ForeignBridgeNativeToErc is ERC677Receiver, BasicBridge, BasicForeignBridge, ERC677Bridge, ForeignValidatable {
 
     /// Event created on money withdraw.
     event UserRequestForAffirmation(address recipient, uint256 value);
+
+    event RelayedNewSetMessage(address[] newSet, bytes32 transactionHash);
 
     function initialize(
         address _validatorContract,
@@ -54,15 +57,46 @@ contract ForeignBridgeNativeToErc is ERC677Receiver, BasicBridge, BasicForeignBr
         erc677token().claimTokens(_token, _to);
     }
 
+    function executeSignatures(uint8[] vs, bytes32[] rs, bytes32[] ss, bytes message) external {
+        require(Message.isMessageValid(message));
+        Message.hasEnoughValidSignaturesForeignBridgeValidator(message, vs, rs, ss, validatorContract());
+        address recipient;
+        uint256 amount;
+        bytes32 txHash;
+        address contractAddress;
+        (recipient, amount, txHash, contractAddress) = Message.parseMessage(message);
+        if (messageWithinLimits(amount)) {
+            require(contractAddress == address(this));
+            require(!relayedMessages(txHash));
+            setRelayedMessages(txHash, true);
+            require(onExecuteMessage(recipient, amount));
+            emit RelayedMessage(recipient, amount, txHash);
+        } else {
+            onFailedMessage(recipient, amount, txHash);
+        }
+    }
+
+    function executeNewSetSignatures(uint8[] vs, bytes32[] rs, bytes32[] ss, bytes message) external {
+        Message.hasEnoughValidNewSetSignaturesForeignBridgeValidator(message, vs, rs, ss, validatorContract());
+        address[] memory newSet;
+        bytes32 txHash;
+        address contractAddress;
+        (newSet, txHash, contractAddress) = Message.parseNewSetMessage(message);
+        require(contractAddress == address(this));
+        require(!relayedMessages(txHash));
+        setRelayedMessages(txHash, true);
+        require(validatorContract().setValidators(newSet));
+        emit RelayedNewSetMessage(newSet, txHash);
+    }
+
     function onExecuteMessage(address _recipient, uint256 _amount) internal returns(bool){
+        if (_recipient == address(this)) {
+            return erc677token().mint(_recipient, _amount);
+        }
         setTotalExecutedPerDay(getCurrentDay(), totalExecutedPerDay(getCurrentDay()).add(_amount));
         if (boolStorage[keccak256(abi.encodePacked("erc677tokenPreMinted"))]) {
             return erc677token().transfer(_recipient, _amount);
         }
-        return erc677token().mint(_recipient, _amount);
-    }
-
-    function mintOnExecuteMessage(address _recipient, uint256 _amount) internal returns(bool){
         return erc677token().mint(_recipient, _amount);
     }
 

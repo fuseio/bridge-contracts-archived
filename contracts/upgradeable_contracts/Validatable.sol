@@ -16,5 +16,4 @@ contract Validatable is EternalStorage {
     function requiredSignatures() public view returns(uint256) {
         return validatorContract().requiredSignatures();
     }
-
 }

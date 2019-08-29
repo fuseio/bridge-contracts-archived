@@ -2,38 +2,14 @@ pragma solidity 0.4.24;
 
 import "../upgradeability/EternalStorage.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "./Validatable.sol";
 import "../libraries/Message.sol";
 
-contract BasicForeignBridge is EternalStorage, Validatable {
+contract BasicForeignBridge is EternalStorage {
     using SafeMath for uint256;
     /// triggered when relay of deposit from HomeBridge is complete
     event RelayedMessage(address recipient, uint value, bytes32 transactionHash);
-    function executeSignatures(uint8[] vs, bytes32[] rs, bytes32[] ss, bytes message) external {
-        Message.hasEnoughValidSignatures(message, vs, rs, ss, validatorContract());
-        address recipient;
-        uint256 amount;
-        bytes32 txHash;
-        address contractAddress;
-        (recipient, amount, txHash, contractAddress) = Message.parseMessage(message);
-        if (messageWithinLimits(amount)) {
-            require(contractAddress == address(this));
-            require(!relayedMessages(txHash));
-            setRelayedMessages(txHash, true);
-            if (recipient == address(this)) {
-                require(mintOnExecuteMessage(recipient, amount));
-            } else {
-                require(onExecuteMessage(recipient, amount));
-            }
-            emit RelayedMessage(recipient, amount, txHash);
-        } else {
-            onFailedMessage(recipient, amount, txHash);
-        }
-    }
 
     function onExecuteMessage(address, uint256) internal returns(bool);
-
-    function mintOnExecuteMessage(address, uint256) internal returns(bool);
 
     function setRelayedMessages(bytes32 _txHash, bool _status) internal {
         boolStorage[keccak256(abi.encodePacked("relayedMessages", _txHash))] = _status;

@@ -48,6 +48,13 @@ FOREIGN_DEPLOYMENT_GAS_PRICE=10000000000
 # transaction.
 GET_RECEIPT_INTERVAL_IN_MILLISECONDS=3000
 
+# The flag defining whether to use an existing ERC677BridgeToken contract.
+USE_EXISTING_TOKEN=false
+
+# The address of ERC677BridgeToken contract.
+# Makes sense only when USE_EXISTING_TOKEN=true
+BRIDGEABLE_TOKEN_ADDRESS=0x
+
 # The name of the ERC677 token to be deployed on the Foreign network.
 BRIDGEABLE_TOKEN_NAME=Your New Bridged Token
 # The symbol name of the ERC677 token to be deployed on the Foreign network.
@@ -66,8 +73,6 @@ HOME_RPC_URL=https://core.poa.network
 # Address on Home network with permissions to change parameters of the bridge contract.
 # For extra security we recommended using a multi-sig wallet contract address here.
 HOME_BRIDGE_OWNER=0x
-# Address on Home network with permissions to change parameters of bridge validator contract.
-HOME_VALIDATORS_OWNER=0x
 # Address on Home network with permissions to upgrade the bridge contract and the bridge validator contract.
 HOME_UPGRADEABLE_ADMIN=0x
 # The daily transaction limit in Wei. As soon as this limit is exceeded, any
@@ -88,6 +93,8 @@ HOME_REQUIRED_BLOCK_CONFIRMATIONS=1
 # transactions for deposit or withdrawal confirmations. This price is used if
 # the Gas price oracle is unreachable.
 HOME_GAS_PRICE=1000000000
+# Address on Home network of the ValidatorSet contract (Consensus)
+HOME_CONSENSUS_ADDRESS=0x
 
 # The RPC channel to a Foreign node able to handle deployment/configuration
 # transactions.
@@ -95,8 +102,6 @@ FOREIGN_RPC_URL=https://mainnet.infura.io
 # Address on Foreign network with permissions to change parameters of the bridge contract.
 # For extra security we recommended using a multi-sig wallet contract address here.
 FOREIGN_BRIDGE_OWNER=0x
-# Address on Foreign network with permissions to change parameters of bridge validator contract.
-FOREIGN_VALIDATORS_OWNER=0x
 # Address on Foreign network with permissions to upgrade the bridge contract and the bridge validator contract.
 FOREIGN_UPGRADEABLE_ADMIN=0x
 # The daily limit in Wei. As soon as this limit is exceeded, any transaction
@@ -118,10 +123,6 @@ FOREIGN_REQUIRED_BLOCK_CONFIRMATIONS=8
 # unreachable.
 FOREIGN_GAS_PRICE=10000000000
 
-# The minimum number of validators required to send their signatures confirming
-# the relay of assets. The same number of validators is expected on both sides
-# of the bridge.
-REQUIRED_NUMBER_OF_VALIDATORS=1
 # The set of validators' addresses. It is assumed that signatures from these
 # addresses are collected on the Home side. The same addresses will be used on
 # the Foreign network to confirm that the finalized agreement was transferred

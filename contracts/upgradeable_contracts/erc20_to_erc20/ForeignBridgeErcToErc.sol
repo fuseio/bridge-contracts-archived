@@ -3,11 +3,12 @@ import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../../libraries/Message.sol";
 import "../BasicBridge.sol";
 import "../BasicForeignBridge.sol";
+import "../Validatable.sol";
 import "../../ERC677Receiver.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 
-contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge {
+contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge, Validatable {
 
     event RelayedMessage(address recipient, uint value, bytes32 transactionHash);
 
@@ -53,13 +54,28 @@ contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge {
         return IERC20(addressStorage[keccak256(abi.encodePacked("erc20token"))]);
     }
 
+    function executeSignatures(uint8[] vs, bytes32[] rs, bytes32[] ss, bytes message) external {
+        require(Message.isMessageValid(message));
+        Message.hasEnoughValidSignatures(message, vs, rs, ss, validatorContract());
+        address recipient;
+        uint256 amount;
+        bytes32 txHash;
+        address contractAddress;
+        (recipient, amount, txHash, contractAddress) = Message.parseMessage(message);
+        if (messageWithinLimits(amount)) {
+            require(contractAddress == address(this));
+            require(!relayedMessages(txHash));
+            setRelayedMessages(txHash, true);
+            require(onExecuteMessage(recipient, amount));
+            emit RelayedMessage(recipient, amount, txHash);
+        } else {
+            onFailedMessage(recipient, amount, txHash);
+        }
+    }
+
     function onExecuteMessage(address _recipient, uint256 _amount) internal returns(bool) {
         setTotalExecutedPerDay(getCurrentDay(), totalExecutedPerDay(getCurrentDay()).add(_amount));
         return erc20token().transfer(_recipient, _amount);
-    }
-
-    function mintOnExecuteMessage(address _recipient, uint256 _amount) internal returns(bool) {
-        revert();
     }
 
     function setErc20token(address _token) private {

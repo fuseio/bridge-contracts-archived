@@ -405,7 +405,7 @@ contract('HomeBridge_ERC20_to_ERC20', async (accounts) => {
       const messageFromContract = await homeBridgeWithTwoSigs.message(msgHashFromLog);
 
       signature.should.be.equal(signatureFromContract);
-      messageFromContract.should.be.equal(messageFromContract);
+      message.should.be.equal(messageFromContract);
       const hashMsg = Web3Utils.soliditySha3(message);
       '1'.should.be.bignumber.equal(await homeBridgeWithTwoSigs.numMessagesSigned(hashMsg))
       const hashSenderMsg = Web3Utils.soliditySha3(authorities[0], hashMsg)

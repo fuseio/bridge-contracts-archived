@@ -44,10 +44,37 @@ contract BasicHomeBridge is EternalStorage, Validatable {
     }
 
     function submitSignature(bytes signature, bytes message) external onlyValidator {
-        // ensure that `signature` is really `message` signed by `msg.sender`
         require(Message.isMessageValid(message));
-        require(msg.sender == Message.recoverAddressFromSignedMessage(signature, message));
+        // ensure that `signature` is really `message` signed by `msg.sender`
+        require(msg.sender == Message.recoverAddressFromSignedMessage(signature, message, true));
+
         bytes32 hashMsg = keccak256(abi.encodePacked(message));
+
+        uint256 signed = submitSignatureInternal(signature, message, hashMsg);
+
+        uint256 reqSigs = requiredSignatures();
+        if (signed >= reqSigs) {
+            setNumMessagesSigned(hashMsg, markAsProcessed(signed));
+            emit CollectedSignatures(msg.sender, hashMsg, reqSigs);
+        }
+    }
+
+    function submitSignatureOfMessageWithUnknownLength(bytes signature, bytes message) external onlyValidator {
+        // ensure that `signature` is really `message` signed by `msg.sender`
+        require(msg.sender == Message.recoverAddressFromSignedMessage(signature, message, false));
+
+        bytes32 hashMsg = keccak256(abi.encodePacked(message));
+
+        uint256 signed = submitSignatureInternal(signature, message, hashMsg);
+
+        uint256 reqSigs = requiredSignatures();
+        if (signed >= reqSigs) {
+            setNumMessagesSigned(hashMsg, markAsProcessed(signed));
+            emit CollectedSignatures(msg.sender, hashMsg, reqSigs);
+        }
+    }
+
+    function submitSignatureInternal(bytes signature, bytes message, bytes32 hashMsg) internal returns(uint256) {
         bytes32 hashSender = keccak256(abi.encodePacked(msg.sender, hashMsg));
 
         uint256 signed = numMessagesSigned(hashMsg);
@@ -69,11 +96,7 @@ contract BasicHomeBridge is EternalStorage, Validatable {
 
         emit SignedForUserRequest(msg.sender, hashMsg);
 
-        uint256 reqSigs = requiredSignatures();
-        if (signed >= reqSigs) {
-            setNumMessagesSigned(hashMsg, markAsProcessed(signed));
-            emit CollectedSignatures(msg.sender, hashMsg, reqSigs);
-        }
+        return signed;
     }
 
     function setMessagesSigned(bytes32 _hash, bool _status) internal {
