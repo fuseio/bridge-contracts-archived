@@ -10,6 +10,7 @@ mkdir -p flats/erc20_to_native
 mkdir -p flats/factories
 
 ./node_modules/.bin/truffle-flattener contracts/upgradeable_contracts/native_to_erc20/ForeignBridgeNativeToErc.sol > flats/native_to_erc20/ForeignBridgeNativeToErc_flat.sol
+./node_modules/.bin/truffle-flattener contracts/upgradeable_contracts/native_to_erc20/ForeignBridgeValidators.sol > flats/native_to_erc20/ForeignBridgeValidators_flat.sol
 ./node_modules/.bin/truffle-flattener contracts/upgradeable_contracts/native_to_erc20/HomeBridgeNativeToErc.sol > flats/native_to_erc20/HomeBridgeNativeToErc_flat.sol
 
 ./node_modules/.bin/truffle-flattener contracts/upgradeable_contracts/erc20_to_erc20/HomeBridgeErcToErc.sol > flats/erc20_to_erc20/HomeBridgeErcToErc_flat.sol
