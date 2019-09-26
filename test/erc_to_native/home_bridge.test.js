@@ -161,7 +161,7 @@ contract('HomeBridge_ERC20_to_Native', async (accounts) => {
       const {logs} = await homeContract.sendTransaction({ from: accounts[1], value: 1 }).should.be.fulfilled
 
       logs[0].event.should.be.equal('UserRequestForSignature')
-      logs[0].args.should.be.deep.equal({ recipient: accounts[1], value: new web3.BigNumber(1) })
+      logs[0].args.should.be.deep.equal({ recipient: accounts[1], value: new web3.BigNumber(1), data: '0x' })
       '1'.should.be.bignumber.equal(await homeContract.totalSpentPerDay(currentDay))
       '1'.should.be.bignumber.equal(await homeContract.totalBurntCoins())
       const homeContractBalance = await web3.eth.getBalance(homeContract.address)
@@ -719,7 +719,8 @@ contract('HomeBridge_ERC20_to_Native', async (accounts) => {
       logs[0].event.should.be.equal('UserRequestForSignature')
       logs[0].args.should.be.deep.equal({
         recipient,
-        value
+        value,
+        data: '0x'
       })
 
       const newOutOfLimitAmount = await homeBridge.outOfLimitAmount()

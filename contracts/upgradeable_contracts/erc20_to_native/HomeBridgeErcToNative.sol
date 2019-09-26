@@ -23,7 +23,7 @@ contract HomeBridgeErcToNative is EternalStorage, BasicBridge, BasicHomeBridge, 
         setTotalSpentPerDay(getCurrentDay(), totalSpentPerDay(getCurrentDay()).add(msg.value));
         setTotalBurntCoins(totalBurntCoins().add(msg.value));
         address(0).transfer(msg.value);
-        emit UserRequestForSignature(msg.sender, msg.value);
+        emit UserRequestForSignature(msg.sender, msg.value, new bytes(0));
     }
 
     function initialize (
@@ -87,8 +87,8 @@ contract HomeBridgeErcToNative is EternalStorage, BasicBridge, BasicHomeBridge, 
         return true;
     }
 
-    function fireEventOnTokenTransfer(address _from, uint256 _value) internal {
-        emit UserRequestForSignature(_from, _value);
+    function fireEventOnTokenTransfer(address _from, uint256 _value, bytes /*_data*/) internal {
+        emit UserRequestForSignature(_from, _value, new bytes(0));
     }
 
     function setTotalBurntCoins(uint256 _amount) internal {

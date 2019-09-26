@@ -553,7 +553,8 @@ contract('HomeBridge_ERC20_to_ERC20', async (accounts) => {
       logs[0].event.should.be.equal('UserRequestForSignature')
       logs[0].args.should.be.deep.equal({
         recipient,
-        value
+        value,
+        data: '0x'
       })
 
       const newOutOfLimitAmount = await homeBridge.outOfLimitAmount()

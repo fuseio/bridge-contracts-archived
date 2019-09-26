@@ -8,7 +8,7 @@ import "./OwnedUpgradeability.sol";
 contract OverdrawManagement is EternalStorage, OwnedUpgradeability {
     using SafeMath for uint256;
 
-    event UserRequestForSignature(address recipient, uint256 value);
+    event UserRequestForSignature(address recipient, uint256 value, bytes data);
 
     function fixAssetsAboveLimits(bytes32 txHash, bool unlockOnForeign) external onlyIfOwnerOfProxy {
         require(!fixedAssets(txHash));
@@ -18,7 +18,7 @@ contract OverdrawManagement is EternalStorage, OwnedUpgradeability {
         require(recipient != address(0) && value > 0);
         setOutOfLimitAmount(outOfLimitAmount().sub(value));
         if (unlockOnForeign) {
-            emit UserRequestForSignature(recipient, value);
+            emit UserRequestForSignature(recipient, value, new bytes(0));
         }
         setFixedAssets(txHash, true);
     }

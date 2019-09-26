@@ -14,18 +14,18 @@ contract ERC677Bridge is BasicBridge {
         addressStorage[keccak256(abi.encodePacked("erc677token"))] = _token;
     }
 
-    function onTokenTransfer(address _from, uint256 _value, bytes /*_data*/) external returns(bool) {
+    function onTokenTransfer(address _from, uint256 _value, bytes _data) external returns(bool) {
         require(msg.sender == address(erc677token()));
         require(withinLimit(_value));
         setTotalSpentPerDay(getCurrentDay(), totalSpentPerDay(getCurrentDay()).add(_value));
         if (!boolStorage[keccak256(abi.encodePacked("erc677tokenPreMinted"))]) {
             erc677token().burn(_value);
         }
-        fireEventOnTokenTransfer(_from, _value);
+        fireEventOnTokenTransfer(_from, _value, _data);
         return true;
     }
 
-    function fireEventOnTokenTransfer(address /*_from */, uint256 /* _value */) internal {
+    function fireEventOnTokenTransfer(address /*_from */, uint256 /* _value */, bytes /* _data */) internal {
         // has to be defined
     }
 

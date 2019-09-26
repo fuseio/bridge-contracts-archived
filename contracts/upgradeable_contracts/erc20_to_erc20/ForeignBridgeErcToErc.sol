@@ -8,7 +8,7 @@ import "../../ERC677Receiver.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 
-contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge, Validatable {
+contract ForeignBridgeErcToErc is ERC677Receiver, BasicBridge, BasicForeignBridge, Validatable {
 
     event RelayedMessage(address recipient, uint value, bytes32 transactionHash);
 
@@ -85,6 +85,11 @@ contract ForeignBridgeErcToErc is BasicBridge, BasicForeignBridge, Validatable {
 
     function messageWithinLimits(uint256 _amount) internal view returns(bool) {
         return withinExecutionLimit(_amount);
+    }
+
+    function onTokenTransfer(address /*_from*/, uint256 /*_value*/, bytes /*_data*/) external returns(bool) {
+        require(msg.sender == address(erc20token()));
+        return true;
     }
 
     function onFailedMessage(address, uint256, bytes32) internal {

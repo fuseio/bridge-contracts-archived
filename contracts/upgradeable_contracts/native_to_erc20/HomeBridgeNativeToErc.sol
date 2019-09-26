@@ -52,7 +52,7 @@ contract HomeBridgeNativeToErc is EternalStorage, BasicBridge, BasicHomeBridge {
         require(msg.data.length == 0);
         require(withinLimit(msg.value));
         setTotalSpentPerDay(getCurrentDay(), totalSpentPerDay(getCurrentDay()).add(msg.value));
-        emit UserRequestForSignature(msg.sender, msg.value);
+        emit UserRequestForSignature(msg.sender, msg.value, new bytes(0));
     }
 
     function getBridgeMode() public pure returns(bytes4 _data) {
