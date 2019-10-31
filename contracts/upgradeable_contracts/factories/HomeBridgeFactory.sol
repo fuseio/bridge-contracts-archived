@@ -97,6 +97,8 @@ contract HomeBridgeFactory is BasicBridgeFactory {
     }
 
     function deployHomeBridgeWithToken(address _token) public {
+        // Check if message sender is minter of token
+        require(_token.isMinter(address(this)), "Must be minter of token");
         // deploy new EternalStorageProxy
         EternalStorageProxy proxy = new EternalStorageProxy();
         // connect it to the static BridgeValidators implementation
@@ -111,15 +113,18 @@ contract HomeBridgeFactory is BasicBridgeFactory {
         proxy = new EternalStorageProxy();
         // connect it to the static homeBridgeErcToErc implementation
         proxy.upgradeTo(1, homeBridgeErcToErcImplementation());
-
+        // add token bridge contract as minter
+        token.addMinter(proxy);
+        //renounce minter
+        token.renounceMinter();
         // cast proxy as IHomeBridge
         IHomeBridge homeBridge = IHomeBridge(proxy);
         // initialize homeBridge
-        homeBridge.initialize(bridgeValidators, homeDailyLimit(), homeMaxPerTx(), minPerTx(), gasPrice(), requiredBlockConfirmations(), _token, foreignDailyLimit(), foreignMaxPerTx(), homeBridgeOwner());
+        homeBridge.initialize(bridgeValidators, homeDailyLimit(), homeMaxPerTx(), minPerTx(), gasPrice(), requiredBlockConfirmations(), token, foreignDailyLimit(), foreignMaxPerTx(), homeBridgeOwner());
         // transfer proxy upgradeability admin
         proxy.transferProxyOwnership(homeBridgeProxyOwner());
         // emit event
-        emit HomeBridgeDeployed(homeBridge, bridgeValidators, _token, block.number);
+        emit HomeBridgeDeployed(homeBridge, bridgeValidators, token, block.number);
     }
 
     function homeBridgeErcToErcImplementation() public view returns(address) {
