@@ -97,8 +97,10 @@ contract HomeBridgeFactory is BasicBridgeFactory {
     }
 
     function deployHomeBridgeWithToken(address _token) public {
-        // Check if message sender is minter of token
+        // Check if contract is minter of token
         require(_token.isMinter(address(this)), "Must be minter of token");
+        // Check if message sender is owner
+        require(_token.owner() ==  msg.sender, "Must be owner of token");
         // deploy new EternalStorageProxy
         EternalStorageProxy proxy = new EternalStorageProxy();
         // connect it to the static BridgeValidators implementation
